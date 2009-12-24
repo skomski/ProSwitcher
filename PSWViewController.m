@@ -42,6 +42,7 @@ static NSUInteger ignoreZoomSetAlphaCountDown;
 static PSWViewController *mainController;
 @implementation PSWViewController
 @synthesize snapshotPageView;
+@synthesize backgroundWindow;
 
 + (PSWViewController *)sharedInstance
 {
@@ -120,31 +121,26 @@ static PSWViewController *mainController;
 	[preferences release];
 	[focusedApplication release];
 	[snapshotPageView release];
+	[backgroundWindow release];
     [super dealloc];
-}
-
-- (void)reparentView
-{
-	// Find appropriate superview and add as subview
-	UIView *buttonBar = [CHSharedInstance(SBIconModel) buttonBar];
-	UIView *buttonBarParent = [buttonBar superview];
-	UIView *targetSuperview = [buttonBarParent superview];
-	if (GetPreference(PSWShowDock, BOOL))
-		[targetSuperview insertSubview:self.view belowSubview:buttonBarParent];
-	else
-		[targetSuperview insertSubview:self.view aboveSubview:buttonBarParent];	
 }
 
 - (void)loadView 
 {
+	backgroundWindow = [[UIWindow alloc] initWithContentRect:CGRectMake(0.0f,0.0f,320.0f,480.0f)];
+	[backgroundWindow setWindowLevel:31337.0f];
+	[backgroundWindow makeKeyAndVisible];
+	
 	UIView *view = [[UIView alloc] initWithFrame:[[UIScreen mainScreen] bounds]];
 	
 	snapshotPageView = [[PSWSnapshotPageView alloc] initWithFrame:CGRectZero applicationController:[PSWApplicationController sharedInstance]];
 	[snapshotPageView setDelegate:self];
 	[view addSubview:snapshotPageView];
 	
-	[self setView:view];
+	[backgroundWindow addSubview:view];
+	[self setView:backgroundWindow];
 	[view release];
+	
 	[self _applyPreferences];
 }
 
@@ -153,6 +149,7 @@ static PSWViewController *mainController;
 	[snapshotPageView removeFromSuperview];
 	[snapshotPageView release];
 	snapshotPageView = nil;
+	[backgroundWindow release];
 	[super viewDidUnload];
 }
 
@@ -180,16 +177,17 @@ static PSWViewController *mainController;
 - (void)didFinishActivate
 {
 	isAnimating = NO;
+	
 }
 - (void)activateWithAnimation:(BOOL)animated
 {
-	// Always reparent view
-	[self reparentView];
 	
 	// Don't double-activate
 	if (isActive)
 		return;
-		
+
+	backgroundWindow.hidden = NO;
+	
 	// Deactivate CategoriesSB
 	if ([CHSharedInstance(SBUIController) respondsToSelector:@selector(categoriesSBCloseAll)])
 		[CHSharedInstance(SBUIController) categoriesSBCloseAll];
@@ -203,6 +201,13 @@ static PSWViewController *mainController;
 	
 	// Load View (must be done before we access snapshotPageView)
 	UIView *view = [self view];
+	
+	if (GetPreference(PSWShowDock, BOOL)){
+		[CHSharedInstance(SBUIController) showButtonBar:YES animate:YES action:nil delegate:nil];
+		UIView *buttonBar = [CHSharedInstance(SBIconModel) buttonBar];
+		UIView *buttonBarParent = [buttonBar superview];
+		[backgroundWindow addSubview:buttonBarParent];
+	}
 	
 	// Restore focused application
 	[snapshotPageView setFocusedApplication:focusedApplication];
@@ -241,6 +246,7 @@ static PSWViewController *mainController;
 - (void)didFinishDeactivate
 {
 	[[self view] removeFromSuperview];
+	backgroundWindow.hidden = YES;
 	isAnimating = NO;
 }
 - (void)deactivateWithAnimation:(BOOL)animated
@@ -262,11 +268,15 @@ static PSWViewController *mainController;
 		[UIView setAnimationDuration:0.5f];
 		[scrollLayer setTransform:CATransform3DMakeScale(2.0f, 2.0f, 1.0f)];
 	}
+	
+	
+	if (GetPreference(PSWShowDock, BOOL))
+          //THE PROBLEM BECAUSE IN SPRINGBOARD ICANT REDISPLAY THE DOCK! HELP :(
 			
 	// Show SpringBoard's page control
 	if (GetPreference(PSWShowPageControl, BOOL))
 		[CHSharedInstance(SBIconController) setPageControlVisible:YES];
-			
+	
 	// Hide ProSwitcher
 	isActive = NO;
 			
@@ -302,7 +312,7 @@ static PSWViewController *mainController;
 {
 	if ([[CHClass(SBAwayController) sharedAwayController] isLocked] || [self isAnimating])
 		return;
-	
+
 	if (SBActive) {
 		// SpringBoard is active, just activate
 		BOOL newActive = ![self isActive];
@@ -313,26 +323,33 @@ static PSWViewController *mainController;
 		NSString *displayIdentifier = [[SBWActiveDisplayStack topApplication] displayIdentifier];
 		// Top application will be nil when app is loading; do nothing
 		if ([displayIdentifier length]) {
+			
 			PSWApplication *activeApp = [[PSWApplicationController sharedInstance] applicationWithDisplayIdentifier:displayIdentifier];
 			
+						
 			// Chicken or the egg situation here and I'm too sleepy to figure it out :P
 			modifyZoomTransformCountDown = 2;
 			ignoreZoomSetAlphaCountDown = 2;
 			
+			
+			/*// No automate background switch ;)
 			// Background
 			if (![activeApp hasNativeBackgrounding]) {
 				if ([SBSharedInstance respondsToSelector:@selector(setBackgroundingEnabled:forDisplayIdentifier:)])
 					[SBSharedInstance setBackgroundingEnabled:YES forDisplayIdentifier:displayIdentifier];
 			}
-			
+			*/
+			 
 			// Deactivate
-			[[activeApp application] setDeactivationSetting:0x2 flag:YES]; // animate
+		//	[[activeApp application] setDeactivationSetting:0x2 flag:YES]; // animate
 			//[activeApp setDeactivationSetting:0x8 value:[NSNumber numberWithDouble:1]]; // disable animations
-			[SBWActiveDisplayStack popDisplay:[activeApp application]];
-			[SBWSuspendingDisplayStack pushDisplay:[activeApp application]];
+			//[SBWActiveDisplayStack popDisplay:[activeApp application]];
+			//[SBWSuspendingDisplayStack pushDisplay:[activeApp application]];
+			
 			
 			// Show ProSwitcher
-			[self setActive:YES animated:NO];
+			[self setActive:YES animated:YES];
+			
 			[snapshotPageView setFocusedApplication:activeApp animated:NO];
 			[event setHandled:YES];
 		}
@@ -359,7 +376,6 @@ static PSWViewController *mainController;
 {
 	disallowRestoreIconList++;
 	[app exit];
-	[self reparentView]; // Fix layout
 	[snapshotPageView removeViewForApplication:app];
 	disallowRestoreIconList--;
 }
@@ -371,7 +387,7 @@ static PSWViewController *mainController;
 
 - (void)_deactivateFromAppActivate
 {
-	[self setActive:NO animated:NO];
+	[self setActive:NO animated:YES];
 }
 
 @end

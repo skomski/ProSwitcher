@@ -211,9 +211,14 @@ static NSUInteger defaultImagePassThrough;
 
 - (void)exit
 {
+	SBApplication *fromApp = [SBWActiveDisplayStack topApplication];
+	NSString *fromIdent = fromApp ? [fromApp displayIdentifier] : @"com.apple.springboard";
+	
 	if ([self hasNativeBackgrounding]) {
 		[ignoredRelaunchDisplayIdentifier release];
 		ignoredRelaunchDisplayIdentifier = [_displayIdentifier retain];
+		[_application kill];
+	} else if (![fromIdent isEqualToString:@"com.apple.springboard"]) {
 		[_application kill];
 	} else {
 		UIApplication *sharedApp = [UIApplication sharedApplication];
@@ -257,9 +262,7 @@ static NSUInteger defaultImagePassThrough;
 				// deactivation of current app)
 				[SBWPreActivateDisplayStack pushDisplay:_application];
 			}
-			
-			// Deactivate the current application
-			
+
 			// If Backgrounder is installed, enable backgrounding for current application
 			UIApplication *sharedApp = [UIApplication sharedApplication];
 			if ([sharedApp respondsToSelector:@selector(setBackgroundingEnabled:forDisplayIdentifier:)])

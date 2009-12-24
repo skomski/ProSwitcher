@@ -4,6 +4,7 @@
 
 @interface PSWViewController : UIViewController<PSWSnapshotPageViewDelegate, LAListener> {
 @private
+	UIWindow* backgroundWindow;
 	PSWSnapshotPageView *snapshotPageView;
 	PSWApplication *focusedApplication;
 	BOOL isActive;
@@ -17,5 +18,6 @@
 - (void)setActive:(BOOL)active animated:(BOOL)animated;
 @property (nonatomic, readonly) BOOL isAnimating;
 @property (nonatomic, readonly) PSWSnapshotPageView *snapshotPageView;
+@property (nonatomic, readonly) UIWindow* backgroundWindow;
 
 @end
